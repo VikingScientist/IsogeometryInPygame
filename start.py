@@ -1,30 +1,10 @@
 import pygame, sys
-import cv2
-from math import *
 from splipy import *
 import numpy as np
+from nutils import mesh, function, plot
 from pygame.locals import *
-
-# manually add smoke by mouse-clicking input
-def add_smoke(x, img):
-    size      = 20
-    intensity = 200
-    for i in range(x[0]-size,x[0]+size):
-        if i<1 or i>=img.shape[0]:
-            continue
-        for j in range(x[1]-size,x[1]+size):
-            if j<1 or j>=img.shape[1]:
-                continue
-            dist2 = (x[0]-i)**2+(x[1]-j)**2
-            if dist2 > size*size:
-                continue;
-            newI = img[i,j] + intensity*(1-dist2/size/size)
-            newI = int(max(0,min(newI, 255)))
-            img[i,j] = newI
-
-# diffuse existing smoke (physics)
-def diffuse(img):
-    return cv2.blur(img, (15,15))
+from heuristic import *
+from fem import *
 
 # color convertion: hue-saturation-value (HSV) to red-green-blue (RGB) format
 def hsv_to_rgb(hsv):
@@ -49,20 +29,21 @@ def hsv_to_rgb(hsv):
     return rgb
 
 
-
 # initialize stuff
 WIDTH  = 1200 # image size
 HEIGHT = 600
+physics2 = Heuristic([WIDTH, HEIGHT])
+physics  = Fem([WIDTH, HEIGHT], [30,18], [2,2])
 pygame.init()
 surf = pygame.display.set_mode((WIDTH,HEIGHT), HWSURFACE|HWPALETTE, 8)
 clock = pygame.time.Clock()
 pygame.display.set_caption('Poisson!')
 
+
 # setup buffer image and colorscheme
 grayscale = [(i,i,i) for i in range(256)]
 jet       = hsv_to_rgb([((255-i)*240/256,.8,.8) for i in range(256)])
-surf.set_palette(jet)
-img = np.zeros((WIDTH,HEIGHT), np.uint8)
+surf.set_palette(grayscale)
 
 
 # main-loop
@@ -72,13 +53,15 @@ while True:
     for event in pygame.event.get():
         if pygame.mouse.get_pressed()[0]:
             x = pygame.mouse.get_pos()
-            add_smoke(x, img)
+            physics.add_smoke(x)
+            # physics2.add_smoke(x)
         if event.type == QUIT:
             pygame.quit()
             sys.exit()
 
     # advance physics
-    img = diffuse(img)
+    physics.diffuse(clock.get_time()/1000)
+    # physics2.diffuse(clock.get_time())
 
     # report performance
     clock.tick()
@@ -87,5 +70,5 @@ while True:
         print('FPS: %f' % (clock.get_fps()))
 
     # draw graphics
-    pygame.surfarray.blit_array(surf, img)
+    pygame.surfarray.blit_array(surf, physics.get_image())
     pygame.display.update()
